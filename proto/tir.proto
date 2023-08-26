@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package tir;
+
+service TirService {
+    rpc GenerateKnowledge (EmptyRequest) returns (Thematics);
+    rpc EvaluateAnswer (EvaluateRequest) returns (Answer);
+    rpc CorrectExplanation (CorrectionRequest) returns (EmptyResponse);
+}
+
+message EmptyRequest {}
+message EmptyResponse {}
+
+
+message Thematics {
+    repeated Thematic thematics = 1;
+}
+
+message Thematic {
+    string title = 1;
+    repeated Topic topics = 2;
+}
+
+message Topic {
+    string title = 1;
+    string explanation = 2;
+}
+
+message EvaluateRequest {
+    string answer = 1;
+    Topic topic = 2;
+}
+
+message CorrectionRequest {
+    string correction = 1;
+    Topic topic = 2;
+}
+
+message Answer {
+    uint32 score = 1;
+    string explanation = 2;
+}
+

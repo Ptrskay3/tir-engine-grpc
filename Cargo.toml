@@ -1,0 +1,16 @@
+[package]
+name = "tir-engine-grpc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tir-engine = { path = "./tir-engine" } 
+tonic = "0.9"
+prost = "0.11"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing = "0.1.37"
+
+[build-dependencies]
+tonic-build = "0.9"
+
