@@ -20,7 +20,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y protobuf-compiler libprotobuf-dev
 ```
 
-Run with as normal with:
+Run as normal with:
 
 ```sh
 cargo r
