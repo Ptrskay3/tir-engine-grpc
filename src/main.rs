@@ -64,9 +64,8 @@ impl TirService for TirServer {
                 }
             })
             .collect();
-        let reply = tir_grpc::Thematics { thematics };
 
-        Ok(Response::new(reply))
+        Ok(Response::new(tir_grpc::Thematics { thematics }))
     }
 
     #[tracing::instrument]
