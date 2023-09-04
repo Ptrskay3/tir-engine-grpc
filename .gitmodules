@@ -1,4 +1,4 @@
 [submodule "tir-engine"]
 	path = tir-engine
 	url = git@github.com:Ptrskay3/tir-engine.git
-	branch = feat/sync-fns
+	branch = main

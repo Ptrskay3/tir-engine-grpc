@@ -29,46 +29,61 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use tir_grpc::tir_service_server::{TirService, TirServiceServer};
 use tir_grpc::{
-    Answer, CorrectionRequest, EmptyRequest, EmptyResponse, EvaluateRequest, Thematics,
+    Answer, CorrectionRequest, EmptyResponse, EvaluateRequest, GenerateKnowledgeRequest, Thematics,
 };
 use tracing_subscriber::prelude::*;
 
-#[derive(Debug, Default)]
-pub struct TirServer {}
+pub struct TirServer {
+    gpt: tirengine::GPT,
+}
 
 #[tonic::async_trait]
 impl TirService for TirServer {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     async fn generate_knowledge(
         &self,
-        _request: Request<EmptyRequest>,
+        request: Request<GenerateKnowledgeRequest>,
     ) -> Result<Response<Thematics>, Status> {
-        let thematics = tirengine::generate_knowledge().await.map_err(|e| {
-            let msg = format!("tir engine failed to generate knowledge, details:\n{:?}", e);
-            Status::unavailable(msg)
-        })?;
-
-        let thematics = thematics
+        // FIXME: really awkward API design in tir-engine
+        // we shouldn't mutate the requested thing, just return the generated data..
+        // This is just horrible to map back and forth between gRPC and tir-engine structs
+        let GenerateKnowledgeRequest { thematic } = request.into_inner();
+        let thematic = thematic.ok_or_else(|| Status::unavailable("missing thematic"))?;
+        let topics = thematic
+            .topics
             .into_iter()
-            .map(|thematic| {
-                let topics: Vec<_> = thematic
-                    .topics
-                    .into_iter()
-                    .map(TryFrom::try_from)
-                    .collect::<Result<Vec<_>, Status>>()
-                    // I believe it's ok to unwrap, we error before this anyway if there's anything wrong
-                    .unwrap();
-                tir_grpc::Thematic {
-                    title: thematic.title,
-                    topics,
-                }
+            .map(|topic| tirengine::Topic {
+                explanation: Some(topic.explanation),
+                title: topic.title,
             })
             .collect();
+        let mut thematic = tirengine::Thematic {
+            title: thematic.title,
+            topics,
+        };
+        self.gpt
+            .generate_knowledge(&mut thematic)
+            .await
+            .map_err(|e| {
+                let msg = format!("tir engine failed to generate knowledge, details:\n{:?}", e);
+                Status::unavailable(msg)
+            })?;
 
-        Ok(Response::new(tir_grpc::Thematics { thematics }))
+        let topics: Result<Vec<_>, _> =
+            thematic.topics.into_iter().map(TryFrom::try_from).collect();
+
+        // Probably it doesn't make sense to return a vector of thematics, but nvm..
+        let thematics = tir_grpc::Thematics {
+            thematics: vec![tir_grpc::Thematic {
+                topics: topics?,
+                title: thematic.title,
+            }],
+        };
+
+        Ok(Response::new(thematics))
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     async fn evaluate_answer(
         &self,
         evaluate_request: Request<EvaluateRequest>,
@@ -80,17 +95,15 @@ impl TirService for TirServer {
             explanation: Some(topic.explanation),
         };
 
-        let answer = tirengine::evaluate_answer(answer, topic)
-            .await
-            .map_err(|e| {
-                let msg = format!("tir engine failed to evaluate answer, details:\n{:?}", e);
-                Status::unavailable(msg)
-            })?;
+        let answer = self.gpt.evaluate_answer(answer, topic).await.map_err(|e| {
+            let msg = format!("tir engine failed to evaluate answer, details:\n{:?}", e);
+            Status::unavailable(msg)
+        })?;
 
         Ok(Response::new(tir_grpc::Answer::from(answer)))
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     async fn correct_explanation(
         &self,
         request: Request<CorrectionRequest>,
@@ -102,7 +115,8 @@ impl TirService for TirServer {
             explanation: Some(topic.explanation),
         };
 
-        tirengine::correct_explanation(correction, &mut topic)
+        self.gpt
+            .correct_explanation(correction, &mut topic)
             .await
             .map_err(|e| {
                 let msg = format!(
@@ -125,10 +139,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
     let addr = "[::1]:50051".parse()?;
-    let greeter = TirServer::default();
+    let secret = std::env::var("OPENAI_SK").expect("OPENAI_SK should be set");
+
+    let tir_server = TirServer {
+        gpt: tirengine::GPT::new(secret),
+    };
 
     Server::builder()
-        .add_service(TirServiceServer::new(greeter))
+        .add_service(TirServiceServer::new(tir_server))
         .serve(addr)
         .await?;
 

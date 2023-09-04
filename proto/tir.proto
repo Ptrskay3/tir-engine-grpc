@@ -3,14 +3,12 @@ syntax = "proto3";
 package tir;
 
 service TirService {
-    rpc GenerateKnowledge (EmptyRequest) returns (Thematics);
+    rpc GenerateKnowledge (GenerateKnowledgeRequest) returns (Thematics);
     rpc EvaluateAnswer (EvaluateRequest) returns (Answer);
     rpc CorrectExplanation (CorrectionRequest) returns (EmptyResponse);
 }
 
-message EmptyRequest {}
 message EmptyResponse {}
-
 
 message Thematics {
     repeated Thematic thematics = 1;
@@ -24,6 +22,10 @@ message Thematic {
 message Topic {
     string title = 1;
     string explanation = 2;
+}
+
+message GenerateKnowledgeRequest {
+    Thematic thematic = 1;
 }
 
 message EvaluateRequest {
