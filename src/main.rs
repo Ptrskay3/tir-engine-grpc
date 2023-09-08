@@ -134,21 +134,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "tirengine=debug,tir-engine-grpc=debug,tonic=debug".into()),
+                .unwrap_or_else(|_| "tirengine=debug,tir_engine_grpc=debug,tonic=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-    let addr = "[::1]:50051".parse()?;
+    let port = std::env::var("PORT").unwrap_or_else(|_| "50051".into());
+    let addr = format!("[::1]:{port}").parse()?;
     let secret = std::env::var("OPENAI_SK").expect("OPENAI_SK should be set");
+
+    assert_ne!(secret.as_str(), "", "OPENAI_SK should not be empty");
 
     let tir_server = TirServer {
         gpt: tirengine::GPT::new(secret),
     };
 
+    tracing::debug!(
+        addr = ?addr,
+        "Starting TIR gRPC service..",
+    );
+
     Server::builder()
         .add_service(TirServiceServer::new(tir_server))
-        .serve(addr)
+        .serve_with_shutdown(addr, shutdown_signal())
         .await?;
 
     Ok(())
+}
+
+pub async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::warn!("signal received, shutting down..");
 }

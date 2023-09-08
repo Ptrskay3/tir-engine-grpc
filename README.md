@@ -26,4 +26,13 @@ Run as normal with:
 cargo r
 ```
 
-I'll expose a gRPC server at localhost:50051.
+It'll expose a gRPC server at localhost:50051.
+
+## Docker:
+
+```sh
+docker build -t <user_name>/<image_name> -f Dockerfile  .
+docker run --network host --env OPENAI_SK=<secret> --env PORT=50052 <user_name>/<image_name>
+```
+
+where `OPENAI_SK` is required, the `PORT` is optional, and defaults to 50051.
