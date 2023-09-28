@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".into());
-    let addr = format!("[::1]:{port}").parse()?;
+    let addr = format!("0.0.0.0:{port}").parse()?;
     let secret = std::env::var("OPENAI_SK").expect("OPENAI_SK should be set");
 
     assert_ne!(secret.as_str(), "", "OPENAI_SK should not be empty");
